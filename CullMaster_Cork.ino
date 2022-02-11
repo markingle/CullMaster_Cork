@@ -26,19 +26,64 @@ BLECharacteristic* pCharacteristicD = NULL;
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
 bool initBoot = true;
+boolean minWeightNotify = false;
+boolean timer_started = false;
+int flag_temp = 0;
 
 uint32_t value = 0;
 
 #define LED 2
 
-#define CORK_SERVICE_UUID  "4fafc201-1fb5-459e-8fcc-c5c9c3319141"      //Weight_Scale_Service_CBUUID in CullMaster_V2 Xcode project
-#define WEIGHT_CHARACTERISTIC_A_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"    //Weight_Switch_Characteristic_CBUUID in CullMaster_V2 Xcode project
-#define BATTERY_CHARACTERISTIC_B_UUID "beb5483e-36e1-4688-b7f6-ea07361b26b9"    //Tare_Characteristic_CBUUID in CullMaster_V2 Xcode project
-//#define CHARACTERISTIC_C_UUID "beb5483e-36e1-4688-b7f7-ea07361b26c8"    //Livewell_ONTIME_Characteristic_CBUUIDD
-//#define CHARACTERISTIC_D_UUID "beb5483e-36e1-4688-b7f8-ea07361b26d9"    //Livewell_TIMER_Characteristic_CBUUID
+//CORK1 = RED
+//CORK2 = GREEN
+//CORK3 = BLACK
+//CORK4 = YELLOW
+//CORK5 = WHITE
+//CORK6 = BLUE
+
+// UID IN IPHONE APP
+//let RED_Service_CBUUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c331914c")
+//let GREEN_Service_CBUUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c331914d")
+//let BLACK_Service_CBUUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c331914e")
+//let YELLO_Service_CBUUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c331914f")
+//let WHITE_Service_CBUUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c3319141")
+//let BLUE_Service_CBUUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c3319142")
+
+#define CORK_SERVICE_UUID  "4fafc201-1fb5-459e-8fcc-c5c9c331914d"                //GREEN - Weight_Scale_Service_CBUUID in CullMaster_V2 Xcode project
+#define FISH_WEIGHT_CHARACTERISTIC_B_UUID "beb5483e-36e1-4688-b7f7-ea07361b26c8" //Fish_Weight_Characteristic_CBUUID
+#define BATTERY_CHARACTERISTIC_C_UUID "beb5483e-36e1-4688-b7f8-ea07361b26d9"     //Battery_Characteristic_CBUUID
+#define FLASHRGB_CHARACTERISTIC_D_UUID "BEB5483E-36E1-4688-B7F6-EA07361B2612"    //FlashRGB_Characteristic_CBUUID
+
+#define PASSKEY 999999
 
 // Initialise the TinyPICO library
 TinyPICO tp = TinyPICO();
+
+hw_timer_t * timer = NULL;
+
+void IRAM_ATTR callRGB(){
+  tp.DotStar_CycleColor(1);
+        initBoot = false;
+};
+
+void flashRGB_On(){
+  timer = timerBegin(0, 80, true);
+  timerAttachInterrupt(timer, &callRGB, true);
+  timerAlarmWrite(timer, 1000000, true);
+  yield();
+  timerAlarmEnable(timer);
+  timer_started = true;
+  Serial.println("Flash RGB On Called");
+};
+
+void flashRGB_Off(){
+    timerAlarmDisable(timer);
+    timerDetachInterrupt(timer);
+    timerEnd(timer);
+    timer = NULL;
+    timer_started = false;
+    Serial.println("FLash RGB Off Called");
+};
 
 class MyCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
@@ -47,17 +92,31 @@ class MyCallbacks: public BLECharacteristicCallbacks {
     };
 };
 
-class offTimeCallback: public BLECharacteristicCallbacks {
+class flashRGBCallback: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
       std::string value = pCharacteristic->getValue();
-      
-      //isscale.set_scale(732.f);                      // 852 this value is obtained by calibrating the scale with known weights; see the README for details
-      ESP.restart();                // reset the scale to 0
-      
+      if (value.length() > 0) {
+        Serial.println("*********");
+        Serial.print("Flag Set to : ");
+        
+        char Str[] = {value[0], value[1], value[2], value[3], value[4]};
+        
+        Serial.println(atoi(Str));
+        flag_temp = atoi(Str);
+        Serial.println();
+        Serial.println("*********");
+
+        if (flag_temp == 1)
+                  {
+                    minWeightNotify = true;
+                  }
+         if (flag_temp == 0)
+                  {
+                    minWeightNotify = false;
+                  }
+      }
     };
 };
-
-
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
@@ -69,16 +128,64 @@ class MyServerCallbacks: public BLEServerCallbacks {
     }
 };
 
+class SecurityCallback : public BLESecurityCallbacks {
+
+  uint32_t onPassKeyRequest(){
+    return 000000;
+  }
+
+  void onPassKeyNotify(uint32_t pass_key){}
+
+  bool onConfirmPIN(uint32_t pass_key){
+    vTaskDelay(5000);
+    return true;
+  }
+
+  bool onSecurityRequest(){
+    return true;
+  }
+
+  void onAuthenticationComplete(esp_ble_auth_cmpl_t cmpl){
+    if(cmpl.success){
+      Serial.println("   - SecurityCallback - Authentication Success");       
+    }else{
+      Serial.println("   - SecurityCallback - Authentication Failure*");
+      pServer->removePeerDevice(pServer->getConnId(), true);
+    }
+    BLEDevice::startAdvertising();
+  }
+};
+
+void bleSecurity(){
+  esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND;
+  esp_ble_io_cap_t iocap = ESP_IO_CAP_OUT;          
+  uint8_t key_size = 16;     
+  uint8_t init_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
+  uint8_t rsp_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
+  uint32_t passkey = PASSKEY;
+  uint8_t auth_option = ESP_BLE_ONLY_ACCEPT_SPECIFIED_AUTH_DISABLE;
+  esp_ble_gap_set_security_param(ESP_BLE_SM_SET_STATIC_PASSKEY, &passkey, sizeof(uint32_t));
+  esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, sizeof(uint8_t));
+  esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, sizeof(uint8_t));
+  esp_ble_gap_set_security_param(ESP_BLE_SM_MAX_KEY_SIZE, &key_size, sizeof(uint8_t));
+  esp_ble_gap_set_security_param(ESP_BLE_SM_ONLY_ACCEPT_SPECIFIED_SEC_AUTH, &auth_option, sizeof(uint8_t));
+  esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, sizeof(uint8_t));
+  esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, sizeof(uint8_t));
+};
+
+
 void setup() {
   Serial.begin(115200);
-  Serial.println("Cull Master Cork1");
+  Serial.println("Cull Master GREEN");
 
   pinMode(LED, OUTPUT);
   digitalWrite(LED, LOW);
   
 
   // Create the BLE Device
-  BLEDevice::init("CORK1");
+  BLEDevice::init("GREEN");
+  BLEDevice::setEncryptionLevel(ESP_BLE_SEC_ENCRYPT);
+  BLEDevice::setSecurityCallbacks(new SecurityCallback());
 
   // Create the BLE Server
   pServer = BLEDevice::createServer();
@@ -88,26 +195,26 @@ void setup() {
   BLEService *pService = pServer->createService(CORK_SERVICE_UUID);
 
 
-  // Create a BLE Characteristic A
-  pCharacteristicA = pService->createCharacteristic(
-                      WEIGHT_CHARACTERISTIC_A_UUID,
+  // Create a BLE Characteristic C
+  pCharacteristicC = pService->createCharacteristic(
+                      BATTERY_CHARACTERISTIC_C_UUID,
                       BLECharacteristic::PROPERTY_READ   |
                       BLECharacteristic::PROPERTY_WRITE_NR |
                       BLECharacteristic::PROPERTY_NOTIFY |
                       BLECharacteristic::PROPERTY_INDICATE
                     );
                     
-// Create a BLE Characteristic B
-  pCharacteristicB = pService->createCharacteristic(
-                      BATTERY_CHARACTERISTIC_B_UUID,
+// Create a BLE Characteristic D
+  pCharacteristicD = pService->createCharacteristic(
+                      FLASHRGB_CHARACTERISTIC_D_UUID,
                       BLECharacteristic::PROPERTY_READ   |
                       BLECharacteristic::PROPERTY_WRITE_NR  |
                       BLECharacteristic::PROPERTY_NOTIFY |
                       BLECharacteristic::PROPERTY_INDICATE
                     );
 
-  pCharacteristicA->setCallbacks(new MyCallbacks());
-  pCharacteristicB->setCallbacks(new offTimeCallback());
+  pCharacteristicC->setCallbacks(new MyCallbacks());
+  pCharacteristicD->setCallbacks(new flashRGBCallback());
 
   pService->start();
 
@@ -119,7 +226,10 @@ void setup() {
   BLEDevice::startAdvertising();
   Serial.println("Waiting a client connection to notify...");
 
-  Serial.println("Initializing CORK");
+  Serial.println("Initializing GREEN");
+
+  tp.DotStar_Clear();
+  tp.DotStar_SetBrightness(255);
 }
 
 void loop() {
@@ -127,10 +237,19 @@ void loop() {
   //notify changed value
     if (deviceConnected) {
         
-        delay(100); // bluetooth stack will go into congestion, if too many packets are sent, in 6 hours test i was able to go as low as 3ms
+        delay(10); // bluetooth stack will go into congestion, if too many packets are sent, in 6 hours test i was able to go as low as 3ms
         // You can set the DotStar colour directly using r,g,b values
-    tp.DotStar_SetPixelColor(0,0,255);
-    initBoot = false;
+        if (minWeightNotify) {
+          //tp.DotStar_CycleColor(1);
+          tp.DotStar_SetPixelColor(0,0,255);
+          delay(100);
+          tp.DotStar_SetPixelColor(0,0,0);
+          delay(100);
+          tp.DotStar_SetPixelColor(0,0,255);
+        } else {
+          tp.DotStar_SetPixelColor(0,0,255);
+        }
+        initBoot = false;
     }
     // disconnecting
     if (!deviceConnected && oldDeviceConnected) {
