@@ -6,6 +6,7 @@
  * MIT License
  * (c) 2018 Bogdan Necula
  *
+ * How to setup the TinyPICO in Arduino https://www.tinypico.com/gettingstarted
 **/
 
 #include <BLEDevice.h>
@@ -42,17 +43,25 @@ uint32_t value = 0;
 //CORK6 = BLUE
 
 // UID IN IPHONE APP
-//let RED_Service_CBUUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c331914c")
-//let GREEN_Service_CBUUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c331914d")
-//let BLACK_Service_CBUUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c331914e")
-//let YELLO_Service_CBUUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c331914f")
-//let WHITE_Service_CBUUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c3319141")
-//let BLUE_Service_CBUUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c3319142")
+//let RED_Service_UUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c331914c")
+//let GREEN_Service_UUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c331914d")
+//let BLACK_Service_UUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c331914e")
+//let YELLO_Service_UUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c331914f")
+//let WHITE_Service_UUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c3319141")
+//let BLUE_Service_UUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c3319142")
 
-#define CORK_SERVICE_UUID  "4fafc201-1fb5-459e-8fcc-c5c9c331914d"                //GREEN - Weight_Scale_Service_CBUUID in CullMaster_V2 Xcode project
+//CORK CHARACTERISTICS DEFINED IN IPHONE APP
+//let RED_FlashRGB_Characteristic_CBUUID = CBUUID(string: "BEB5483E-36E1-4688-B7F6-EA07361B2611")
+//let GREEN_FlashRGB_Characteristic_CBUUID = CBUUID(string: "BEB5483E-36E1-4688-B7F6-EA07361B2612")
+//let BLACK_FlashRGB_Characteristic_CBUUID = CBUUID(string: "BEB5483E-36E1-4688-B7F6-EA07361B2613")
+//let YELLO_FlashRGB_Characteristic_CBUUID = CBUUID(string: "BEB5483E-36E1-4688-B7F6-EA07361B2614")
+//let WHITE_FlashRGB_Characteristic_CBUUID = CBUUID(string: "BEB5483E-36E1-4688-B7F6-EA07361B2615")
+//let BLUE_FlashRGB_Characteristic_CBUUID = CBUUID(string: "BEB5483E-36E1-4688-B7F6-EA07361B2616")
+
+#define CORK_SERVICE_UUID  "4fafc201-1fb5-459e-8fcc-c5c9c331914c"                // << SERVICE CHANGE HERE.....Weight_Scale_Service_CBUUID in CullMaster_V2 Xcode project
 #define FISH_WEIGHT_CHARACTERISTIC_B_UUID "beb5483e-36e1-4688-b7f7-ea07361b26c8" //Fish_Weight_Characteristic_CBUUID
-#define BATTERY_CHARACTERISTIC_C_UUID "beb5483e-36e1-4688-b7f8-ea07361b26d9"     //Battery_Characteristic_CBUUID
-#define FLASHRGB_CHARACTERISTIC_D_UUID "BEB5483E-36E1-4688-B7F6-EA07361B2612"    //FlashRGB_Characteristic_CBUUID
+#define BATTERY_CHARACTERISTIC_C_UUID "beb5483e-36e1-4688-b7f8-ea07361b26d9"     // << BATTERY CHANGE HEREBattery_Characteristic_CBUUID
+#define FLASHRGB_CHARACTERISTIC_D_UUID "BEB5483E-36E1-4688-B7F6-EA07361B2611"    // << FLASHING RGB CHANGE HERE......FlashRGB_Characteristic_CBUUID
 
 #define PASSKEY 999999
 
@@ -176,16 +185,16 @@ void bleSecurity(){
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("Cull Master GREEN");
+  Serial.println("Cull Master RED");   //<<<<< CHANGE HERE FOR LOADING EACH CORK
 
   pinMode(LED, OUTPUT);
   digitalWrite(LED, LOW);
   
 
   // Create the BLE Device
-  BLEDevice::init("GREEN");
-  BLEDevice::setEncryptionLevel(ESP_BLE_SEC_ENCRYPT);
-  BLEDevice::setSecurityCallbacks(new SecurityCallback());
+  BLEDevice::init("RED");        //<<<<< CHANGE HERE FOR LOADING EACH CORK
+  //BLEDevice::setEncryptionLevel(ESP_BLE_SEC_ENCRYPT);
+  //BLEDevice::setSecurityCallbacks(new SecurityCallback());
 
   // Create the BLE Server
   pServer = BLEDevice::createServer();
@@ -226,7 +235,7 @@ void setup() {
   BLEDevice::startAdvertising();
   Serial.println("Waiting a client connection to notify...");
 
-  Serial.println("Initializing GREEN");
+  Serial.println("Initializing RED");          //<<<<< CHANGE HERE FOR LOADING EACH CORK
 
   tp.DotStar_Clear();
   tp.DotStar_SetBrightness(255);
@@ -250,6 +259,15 @@ void loop() {
           tp.DotStar_SetPixelColor(0,0,255);
         }
         initBoot = false;
+        Serial.print("Battery Volage - ");
+        Serial.println(tp.GetBatteryVoltage());
+        Serial.println();
+        
+        if (tp.IsChargingBattery()) {
+          Serial.println("Battery is Charging");
+        } else {
+          Serial.println("Battery is not charging");
+        }
     }
     // disconnecting
     if (!deviceConnected && oldDeviceConnected) {
