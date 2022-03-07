@@ -52,18 +52,16 @@ uint32_t value = 0;
 
 #define CORK_SERVICE_UUID  "4fafc201-1fb5-459e-8fcc-c5c9c3319141"                // << SERVICE CHANGE HERE.....Cork_Service_CBUUID in CullMaster_V2 Xcode project
 #define FISH_WEIGHT_CHARACTERISTIC_B_UUID "beb5483e-36e1-4688-b7f7-ea07361b26c8" //Fish_Weight_Characteristic_CBUUID
-//#define BATTERY_CHARACTERISTIC_C_UUID "beb5483e-36e1-4688-b7f8-ea07361b26d9"     // << BATTERY CHANGE HEREBattery_Characteristic_CBUUID
 
-//#define BATTERY_SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331915a"     // << BATTERY CHANGE HEREBattery_Characteristic_CBUUID
 #define BATTERY_SERVICE_UUID BLEUUID((uint16_t)0x180F)
 
 //let GREEN_Battery_Characteristic_CBUUID = CBUUID(string: "2A19")
 //let YELLO_Battery_Characteristic_CBUUID = CBUUID(string: "2A20")
 //let RED_Battery_Characteristic_CBUUID = CBUUID(string: "2A21")
-//let WHITE_Battery_Characteristic_CBUUID = CBUUID(string: "2A22")
+//let WHITE_Battery_Characteristic_CBUUID = CBUUID(string: "2A18")
 //let BLACK_Battery_Characteristic_CBUUID = CBUUID(string: "2A23")
 
-BLECharacteristic BatteryLevelCharacteristic(BLEUUID((uint16_t)0x2A22), BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+BLECharacteristic BatteryLevelCharacteristic(BLEUUID((uint16_t)0x2A18), BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
 BLEDescriptor BatteryLevelDescriptor(BLEUUID((uint16_t)0x2901));
 
 //CORK FLASHRGB CHARACTERISTICS DEFINED IN IPHONE APP
@@ -207,8 +205,8 @@ void setup() {
 
   // Create the BLE Device
   BLEDevice::init("WHITE");        //<<<<< CHANGE HERE FOR LOADING EACH CORK
-  //BLEDevice::setEncryptionLevel(ESP_BLE_SEC_ENCRYPT);
-  //BLEDevice::setSecurityCallbacks(new SecurityCallback());
+  BLEDevice::setEncryptionLevel(ESP_BLE_SEC_ENCRYPT);
+  BLEDevice::setSecurityCallbacks(new SecurityCallback());
 
   // Create the BLE Server
   BLEServer *pServer = BLEDevice::createServer();
@@ -222,7 +220,6 @@ void setup() {
   BatteryLevelCharacteristic.addDescriptor(&BatteryLevelDescriptor);
   BatteryLevelCharacteristic.addDescriptor(new BLE2902());
 
-  //pAdvertising->addServiceUUID(BATTERY_SERVICE_UUID);
   pServer->getAdvertising()->addServiceUUID(BATTERY_SERVICE_UUID);
 
   pBatteryService->start();
@@ -325,6 +322,7 @@ void loop() {
         // do stuff here on connecting
         Serial.println(" Device is connecting");
         oldDeviceConnected = deviceConnected;
+         BLEDevice::getAdvertising()->stop();
     }
     if (initBoot) {
       tp.DotStar_SetPixelColor(0,255,0);
