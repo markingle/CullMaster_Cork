@@ -32,6 +32,7 @@ boolean timer_started = false;
 int flag_temp = 0;
 
 uint32_t value = 0;
+uint8_t old_voltage_percentage = 0;
 
 #define LED 2
 
@@ -265,6 +266,13 @@ void setup() {
 
   tp.DotStar_Clear();
   tp.DotStar_SetBrightness(255);
+
+//Get voltage on init and store in old voltage percentage...send it to the app
+  float voltage = tp.GetBatteryVoltage();
+  float volt_temp = voltage/4.30;
+  old_voltage_percentage = 100*volt_temp;
+  Serial.print("Init Battery Percentage - ");
+  Serial.println(old_voltage_percentage);   
 }
 
 void loop() {
@@ -285,29 +293,36 @@ void loop() {
           tp.DotStar_SetPixelColor(0,0,255);
         }
         initBoot = false;
-        Serial.print("Battery Volage - ");
-        Serial.println(tp.GetBatteryVoltage());
-        Serial.println();
+        //Serial.print("Battery Volage - ");
+        //Serial.println(tp.GetBatteryVoltage());
+        //Serial.println();
 
         float voltage = tp.GetBatteryVoltage();
         float volt_temp = voltage/4.30;
-        //uint8_t voltage_percentage = 100*volt_temp;
         uint8_t voltage_percentage = 100*volt_temp;
 
         Serial.print("Battery Percentage - ");
-        Serial.println(voltage_percentage);
+        Serial.print(voltage_percentage);
+        Serial.print(" == ");
+        Serial.println(old_voltage_percentage);
 
-        BatteryLevelCharacteristic.setValue(&voltage_percentage, 1);
-        BatteryLevelCharacteristic.notify();
-        delay(1000);
+
+        if (old_voltage_percentage >= voltage_percentage) {
+          BatteryLevelCharacteristic.setValue(&voltage_percentage, 1);
+          BatteryLevelCharacteristic.notify();
+         old_voltage_percentage = voltage_percentage;
+         delay(1000);
+        }
+
+        
 
         //level++;
         
-        if (tp.IsChargingBattery()) {
-          Serial.println("Battery is Charging");
-        } else {
-          Serial.println("Battery is not charging");
-        }
+        //if (tp.IsChargingBattery()) {
+        //  Serial.println("Battery is Charging");
+        //} else {
+        //  Serial.println("Battery is not charging");
+        //}
     }
     // disconnecting
     if (!deviceConnected && oldDeviceConnected) {
@@ -316,13 +331,14 @@ void loop() {
         Serial.println("start advertising");
         oldDeviceConnected = deviceConnected;
         tp.DotStar_SetPixelColor(255,0,0);
+        old_voltage_percentage = 100;  //reset old voltage to 100 percentage so that on reconnect the voltage is sent again....yeah this is a hack!!!
     }
     // connecting
     if (deviceConnected && !oldDeviceConnected) {
         // do stuff here on connecting
         Serial.println(" Device is connecting");
         oldDeviceConnected = deviceConnected;
-         BLEDevice::getAdvertising()->stop();
+        BLEDevice::getAdvertising()->stop();
     }
     if (initBoot) {
       tp.DotStar_SetPixelColor(0,255,0);
